@@ -1,0 +1,11 @@
+apps:
+  - name: frontend
+    path: ./apps/frontend
+    type: react
+    port: 80
+    
+  - name: backend
+    path: ./apps/backend
+    type: node
+    port: 3000
+    health: /health

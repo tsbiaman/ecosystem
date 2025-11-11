@@ -1,0 +1,48 @@
+services:
+  frontend-dev:
+    build: ../apps/frontend
+    container_name: frontend-dev
+    restart: unless-stopped
+    networks:
+      - web
+      - development
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.frontend-dev.rule=Host(`dev.tsbi.fun`)
+      - traefik.http.routers.frontend-dev.entrypoints=websecure
+      - traefik.http.routers.frontend-dev.tls.certresolver=letsencrypt
+
+  backend-dev:
+    build: ../apps/backend
+    container_name: backend-dev
+    restart: unless-stopped
+    networks:
+      - development
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.backend-dev.rule=Host(`api-dev.tsbi.fun`)
+      - traefik.http.routers.backend-dev.entrypoints=websecure
+      - traefik.http.routers.backend-dev.tls.certresolver=letsencrypt
+
+  db-dev:
+    image: postgres:15-alpine
+    container_name: db-dev
+    restart: unless-stopped
+    networks:
+      - development
+    environment:
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: devdb
+    volumes:
+      - dev-db-data:/var/lib/postgresql/data
+
+networks:
+  development:
+    external: true
+
+volumes:
+  dev-db-data:
