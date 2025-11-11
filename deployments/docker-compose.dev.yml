@@ -1,3 +1,6 @@
+secrets:
+  db_password:
+    file: /data/ecosystem/secrets/dev_db_pass
 services:
   frontend-dev:
     image: frontend-dev:local
@@ -29,7 +32,10 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3000
-      - DATABASE_URL=postgresql://dev:dev@db-dev:5432/devdb
+      - DATABASE_URL=postgresql://dev@db-dev:5432/devdb
+      - DATABASE_PASSWORD_FILE=/run/secrets/db_password
+    secrets:
+      - db_password
     depends_on:
       - db-dev
     labels:
@@ -55,8 +61,12 @@ services:
       - development
     environment:
       POSTGRES_USER: dev
-      POSTGRES_PASSWORD: dev
+      # POSTGRES_PASSWORD: dev
       POSTGRES_DB: devdb
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+
     volumes:
       - dev-db-data:/var/lib/postgresql/data
 
