@@ -19,7 +19,7 @@ jobs:
           script: |
             cd /data/ecosystem
             git pull origin develop
-            docker compose -f docker-compose.yml -f deployments/docker-compose.dev.yml up -d --build
+            docker stack deploy -c deployments/stack-tsbi-dev.yml tsbi-dev
             
             # Cleanup old images
             docker image prune -f

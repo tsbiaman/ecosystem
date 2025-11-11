@@ -1,0 +1,379 @@
+version: '3.8'
+
+secrets:
+  dev_db_password:
+    file: /data/ecosystem/secrets/dev_db_pass
+  dev_redis_password:
+    file: /data/ecosystem/secrets/dev_redis_pass
+  staging_db_password:
+    file: /data/ecosystem/secrets/staging_db_pass
+  staging_redis_password:
+    file: /data/ecosystem/secrets/staging_redis_pass
+  prod_db_password:
+    file: /data/ecosystem/secrets/prod_db_pass
+  prod_redis_password:
+    file: /data/ecosystem/secrets/prod_redis_pass
+
+services:
+  # DEV ENVIRONMENT
+  frontend-dev:
+    image: frontend-dev:local2
+    build:
+      context: /data/ecosystem/apps/frontend
+      dockerfile: Dockerfile
+    networks:
+      - swarm_web
+      - swarm_development
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=swarm_web
+      - traefik.http.routers.frontend-dev.rule=Host(`dev.tsbi.fun`)
+      - traefik.http.routers.frontend-dev.entrypoints=websecure
+      - traefik.http.routers.frontend-dev.tls.certresolver=letsencrypt
+      - traefik.http.services.frontend-dev.loadbalancer.server.port=8080
+
+  backend-dev:
+    image: backend-dev:local
+    build:
+      context: /data/ecosystem/apps/backend
+      dockerfile: Dockerfile
+    networks:
+      - swarm_web
+      - swarm_development
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DATABASE_URL=postgresql://dev@db-dev:5432/devdb
+      - DATABASE_PASSWORD_FILE=/run/secrets/dev_db_password
+      - REDIS_URL=redis://redis-dev:6379
+      - REDIS_PASSWORD_FILE=/run/secrets/dev_redis_password
+    secrets:
+      - dev_db_password
+      - dev_redis_password
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=swarm_web
+      - traefik.http.routers.backend-dev.rule=Host(`api-dev.tsbi.fun`)
+      - traefik.http.routers.backend-dev.entrypoints=websecure
+      - traefik.http.routers.backend-dev.tls.certresolver=letsencrypt
+      - traefik.http.services.backend-dev.loadbalancer.server.port=3000
+      # API Proxy for frontend
+      - traefik.http.routers.api-proxy-dev.rule=Host(`dev.tsbi.fun`) && PathPrefix(`/api`)
+      - traefik.http.routers.api-proxy-dev.entrypoints=websecure
+      - traefik.http.routers.api-proxy-dev.tls.certresolver=letsencrypt
+      - traefik.http.routers.api-proxy-dev.service=backend-dev
+      - traefik.http.middlewares.api-proxy-strip.stripprefix.prefixes=/api
+      - traefik.http.routers.api-proxy-dev.middlewares=api-proxy-strip
+      - traefik.http.routers.api-proxy-dev.priority=100
+
+  db-dev:
+    image: postgres:15-alpine
+    networks:
+      - swarm_development
+    environment:
+      POSTGRES_USER: dev
+      POSTGRES_DB: devdb
+      POSTGRES_PASSWORD_FILE: /run/secrets/dev_db_password
+    secrets:
+      - dev_db_password
+    volumes:
+      - dev-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev -d devdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 1G
+
+  redis-dev:
+    image: redis:7-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - yes
+      - --requirepass
+      - devredis
+    networks:
+      - swarm_development
+    volumes:
+      - dev-redis-data:/data
+    secrets:
+      - dev_redis_password
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "devredis", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  # STAGING ENVIRONMENT
+  frontend-staging:
+    image: frontend-staging:local
+    build:
+      context: /data/ecosystem/apps/frontend
+      dockerfile: Dockerfile
+    networks:
+      - swarm_web
+      - swarm_staging
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=swarm_web
+      - traefik.http.routers.frontend-staging.rule=Host(`staging.tsbi.fun`)
+      - traefik.http.routers.frontend-staging.entrypoints=websecure
+      - traefik.http.routers.frontend-staging.tls.certresolver=letsencrypt
+      - traefik.http.services.frontend-staging.loadbalancer.server.port=80
+
+  backend-staging:
+    image: backend-staging:local
+    build:
+      context: /data/ecosystem/apps/backend
+      dockerfile: Dockerfile
+    networks:
+      - swarm_web
+      - swarm_staging
+    environment:
+      - NODE_ENV=staging
+      - PORT=3000
+      - DATABASE_URL=postgresql://staging@db-staging:5432/stagingdb
+      - DATABASE_PASSWORD_FILE=/run/secrets/staging_db_password
+      - REDIS_URL=redis://redis-staging:6379
+      - REDIS_PASSWORD_FILE=/run/secrets/staging_redis_password
+    secrets:
+      - staging_db_password
+      - staging_redis_password
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=swarm_web
+      - traefik.http.routers.backend-staging.rule=Host(`api-staging.tsbi.fun`)
+      - traefik.http.routers.backend-staging.entrypoints=websecure
+      - traefik.http.routers.backend-staging.tls.certresolver=letsencrypt
+      - traefik.http.services.backend-staging.loadbalancer.server.port=3000
+      # API Proxy for frontend
+      - traefik.http.routers.api-proxy-staging.rule=Host(`staging.tsbi.fun`) && PathPrefix(`/api`)
+      - traefik.http.routers.api-proxy-staging.entrypoints=websecure
+      - traefik.http.routers.api-proxy-staging.tls.certresolver=letsencrypt
+      - traefik.http.routers.api-proxy-staging.service=backend-staging
+      - traefik.http.middlewares.api-proxy-staging.stripprefix.prefixes=/api
+      - traefik.http.routers.api-proxy-staging.middlewares=api-proxy-staging
+      - traefik.http.routers.api-proxy-staging.priority=100
+
+  db-staging:
+    image: postgres:15-alpine
+    networks:
+      - swarm_staging
+    environment:
+      POSTGRES_USER: staging
+      POSTGRES_DB: stagingdb
+      POSTGRES_PASSWORD_FILE: /run/secrets/staging_db_password
+    secrets:
+      - staging_db_password
+    volumes:
+      - staging-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U staging -d stagingdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 1G
+
+  redis-staging:
+    image: redis:7-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - yes
+      - --requirepass
+      - stagingredis
+    networks:
+      - swarm_staging
+    volumes:
+      - staging-redis-data:/data
+    secrets:
+      - staging_redis_password
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "stagingredis", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  # PRODUCTION ENVIRONMENT
+  frontend-prod:
+    image: frontend-prod:local
+    build:
+      context: /data/ecosystem/apps/frontend
+      dockerfile: Dockerfile
+    networks:
+      - swarm_web
+      - swarm_production
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=swarm_web
+      - traefik.http.routers.frontend-prod.rule=Host(`tsbi.fun`) || Host(`www.tsbi.fun`)
+      - traefik.http.routers.frontend-prod.entrypoints=websecure
+      - traefik.http.routers.frontend-prod.tls.certresolver=letsencrypt
+      - traefik.http.services.frontend-prod.loadbalancer.server.port=80
+
+  backend-prod:
+    image: backend-prod:local
+    build:
+      context: /data/ecosystem/apps/backend
+      dockerfile: Dockerfile
+    networks:
+      - swarm_web
+      - swarm_production
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://prod@db-prod:5432/proddb
+      - DATABASE_PASSWORD_FILE=/run/secrets/prod_db_password
+      - REDIS_URL=redis://redis-prod:6379
+      - REDIS_PASSWORD_FILE=/run/secrets/prod_redis_password
+    secrets:
+      - prod_db_password
+      - prod_redis_password
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=swarm_web
+      - traefik.http.routers.backend-prod.rule=Host(`api.tsbi.fun`)
+      - traefik.http.routers.backend-prod.entrypoints=websecure
+      - traefik.http.routers.backend-prod.tls.certresolver=letsencrypt
+      - traefik.http.services.backend-prod.loadbalancer.server.port=3000
+      # API Proxy for frontend
+      - traefik.http.routers.api-proxy-prod.rule=(Host(`tsbi.fun`) || Host(`www.tsbi.fun`)) && PathPrefix(`/api`)
+      - traefik.http.routers.api-proxy-prod.entrypoints=websecure
+      - traefik.http.routers.api-proxy-prod.tls.certresolver=letsencrypt
+      - traefik.http.routers.api-proxy-prod.service=backend-prod
+      - traefik.http.middlewares.api-proxy-prod.stripprefix.prefixes=/api
+      - traefik.http.routers.api-proxy-prod.middlewares=api-proxy-prod
+      - traefik.http.routers.api-proxy-prod.priority=100
+
+  db-prod:
+    image: postgres:15-alpine
+    networks:
+      - swarm_production
+    environment:
+      POSTGRES_USER: prod
+      POSTGRES_DB: proddb
+      POSTGRES_PASSWORD_FILE: /run/secrets/prod_db_password
+    secrets:
+      - prod_db_password
+    volumes:
+      - prod-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prod -d proddb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 1G
+
+  redis-prod:
+    image: redis:7-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - yes
+      - --requirepass
+      - prodredis
+    networks:
+      - swarm_production
+    volumes:
+      - prod-redis-data:/data
+    secrets:
+      - prod_redis_password
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "prodredis", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+networks:
+  swarm_web:
+    external: true
+  swarm_development:
+    external: true
+  swarm_staging:
+    external: true
+  swarm_production:
+    external: true
+
+volumes:
+  dev-db-data:
+  dev-redis-data:
+  staging-db-data:
+  staging-redis-data:
+  prod-db-data:
+  prod-redis-data:

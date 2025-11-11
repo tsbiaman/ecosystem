@@ -1,3 +1,5 @@
+version: '3.8'
+
 secrets:
   db_password:
     file: /data/ecosystem/secrets/prod_db_pass
@@ -8,57 +10,59 @@ services:
   frontend-prod:
     image: frontend-prod:local
     build:
-      context: ../../apps/frontend
+      context: /data/ecosystem/apps/frontend
       dockerfile: Dockerfile
-    container_name: frontend-prod
-    restart: unless-stopped
     networks:
-      - web
-      - production
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.frontend-prod.rule=Host(`tsbi.fun`) || Host(`www.tsbi.fun`)
-      - traefik.http.routers.frontend-prod.entrypoints=websecure
-      - traefik.http.routers.frontend-prod.tls.certresolver=letsencrypt
-      - traefik.http.routers.frontend-prod.priority=1
+      - swarm_web
+      - swarm_production
     deploy:
+      replicas: 1
       resources:
         limits:
           cpus: '0.25'
           memory: 128M
-        reservations:
-          cpus: '0.10'
-          memory: 64M
+      restart_policy:
+        condition: on-failure
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=swarm_web
+      - traefik.http.routers.frontend-prod.rule=Host(`tsbi.fun`) || Host(`www.tsbi.fun`)
+      - traefik.http.routers.frontend-prod.entrypoints=websecure
+      - traefik.http.routers.frontend-prod.tls.certresolver=letsencrypt
+      - traefik.http.services.frontend-prod.loadbalancer.server.port=80
 
   backend-prod:
     image: backend-prod:local
     build:
-      context: ../../apps/backend
+      context: /data/ecosystem/apps/backend
       dockerfile: Dockerfile
-    container_name: backend-prod
-    restart: unless-stopped
     networks:
-      - web
-      - production
+      - swarm_web
+      - swarm_production
     environment:
       - NODE_ENV=production
       - PORT=3000
       - DATABASE_URL=postgresql://prod@db-prod:5432/proddb
       - DATABASE_PASSWORD_FILE=/run/secrets/db_password
-      - REDIS_URL=redis://:prod@redis-prod:6379
+      - REDIS_URL=redis://redis-prod:6379
       - REDIS_PASSWORD_FILE=/run/secrets/redis_password
     secrets:
       - db_password
       - redis_password
-    depends_on:
-      - db-prod
-      - redis-prod
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
     labels:
       - traefik.enable=true
+      - traefik.docker.network=swarm_web
       - traefik.http.routers.backend-prod.rule=Host(`api.tsbi.fun`)
       - traefik.http.routers.backend-prod.entrypoints=websecure
       - traefik.http.routers.backend-prod.tls.certresolver=letsencrypt
       - traefik.http.services.backend-prod.loadbalancer.server.port=3000
+      # API Proxy for frontend
       - traefik.http.routers.api-proxy-prod.rule=(Host(`tsbi.fun`) || Host(`www.tsbi.fun`)) && PathPrefix(`/api`)
       - traefik.http.routers.api-proxy-prod.entrypoints=websecure
       - traefik.http.routers.api-proxy-prod.tls.certresolver=letsencrypt
@@ -66,21 +70,11 @@ services:
       - traefik.http.middlewares.api-proxy-prod.stripprefix.prefixes=/api
       - traefik.http.routers.api-proxy-prod.middlewares=api-proxy-prod
       - traefik.http.routers.api-proxy-prod.priority=100
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
 
   db-prod:
     image: postgres:15-alpine
-    container_name: db-prod
-    restart: unless-stopped
     networks:
-      - production
+      - swarm_production
     environment:
       POSTGRES_USER: prod
       POSTGRES_DB: proddb
@@ -89,44 +83,48 @@ services:
       - db_password
     volumes:
       - prod-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prod -d proddb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     deploy:
+      replicas: 1
       resources:
         limits:
           cpus: '0.75'
           memory: 1G
-        reservations:
-          cpus: '0.50'
-          memory: 512M
 
   redis-prod:
     image: redis:7-alpine
-    container_name: redis-prod
-    restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass $$(cat /run/secrets/redis_password)
+    command:
+      - redis-server
+      - --appendonly
+      - yes
+      - --requirepass
+      - prodredis
     networks:
-      - production
+      - swarm_production
     volumes:
       - prod-redis-data:/data
     secrets:
       - redis_password
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "$$(cat /run/secrets/redis_password)", "ping"]
+      test: ["CMD", "redis-cli", "-a", "prodredis", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
     deploy:
+      replicas: 1
       resources:
         limits:
           cpus: '0.25'
           memory: 256M
-        reservations:
-          cpus: '0.10'
-          memory: 128M
 
 networks:
-  production:
+  swarm_web:
     external: true
-  web:
+  swarm_production:
     external: true
 
 volumes:

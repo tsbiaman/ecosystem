@@ -15,7 +15,7 @@ const html = `<!DOCTYPE html>
 </head>
 <body>
   <div class="container">
-    <h1>🚀 TSBI Development Environment v1.0</h1>
+    <h1>🚀 TSBI Development Environment Swarn v2.0</h1>
     <div class="status">✅ Frontend deployed successfully</div>
     <h2>API Status:</h2>
     <div id="api-status">Loading...</div>

@@ -1,3 +1,5 @@
+version: '3.8'
+
 secrets:
   db_password:
     file: /data/ecosystem/secrets/staging_db_pass
@@ -8,57 +10,59 @@ services:
   frontend-staging:
     image: frontend-staging:local
     build:
-      context: ../../apps/frontend
+      context: /data/ecosystem/apps/frontend
       dockerfile: Dockerfile
-    container_name: frontend-staging
-    restart: unless-stopped
     networks:
-      - web
-      - staging
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.frontend-staging.rule=Host(`staging.tsbi.fun`)
-      - traefik.http.routers.frontend-staging.entrypoints=websecure
-      - traefik.http.routers.frontend-staging.tls.certresolver=letsencrypt
-      - traefik.http.routers.frontend-staging.priority=1
+      - swarm_web
+      - swarm_staging
     deploy:
+      replicas: 1
       resources:
         limits:
           cpus: '0.25'
           memory: 128M
-        reservations:
-          cpus: '0.10'
-          memory: 64M
+      restart_policy:
+        condition: on-failure
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=swarm_web
+      - traefik.http.routers.frontend-staging.rule=Host(`staging.tsbi.fun`)
+      - traefik.http.routers.frontend-staging.entrypoints=websecure
+      - traefik.http.routers.frontend-staging.tls.certresolver=letsencrypt
+      - traefik.http.services.frontend-staging.loadbalancer.server.port=80
 
   backend-staging:
     image: backend-staging:local
     build:
-      context: ../../apps/backend
+      context: /data/ecosystem/apps/backend
       dockerfile: Dockerfile
-    container_name: backend-staging
-    restart: unless-stopped
     networks:
-      - web
-      - staging
+      - swarm_web
+      - swarm_staging
     environment:
       - NODE_ENV=staging
       - PORT=3000
       - DATABASE_URL=postgresql://staging@db-staging:5432/stagingdb
       - DATABASE_PASSWORD_FILE=/run/secrets/db_password
-      - REDIS_URL=redis://:staging@redis-staging:6379
+      - REDIS_URL=redis://redis-staging:6379
       - REDIS_PASSWORD_FILE=/run/secrets/redis_password
     secrets:
       - db_password
       - redis_password
-    depends_on:
-      - db-staging
-      - redis-staging
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
     labels:
       - traefik.enable=true
+      - traefik.docker.network=swarm_web
       - traefik.http.routers.backend-staging.rule=Host(`api-staging.tsbi.fun`)
       - traefik.http.routers.backend-staging.entrypoints=websecure
       - traefik.http.routers.backend-staging.tls.certresolver=letsencrypt
       - traefik.http.services.backend-staging.loadbalancer.server.port=3000
+      # API Proxy for frontend
       - traefik.http.routers.api-proxy-staging.rule=Host(`staging.tsbi.fun`) && PathPrefix(`/api`)
       - traefik.http.routers.api-proxy-staging.entrypoints=websecure
       - traefik.http.routers.api-proxy-staging.tls.certresolver=letsencrypt
@@ -66,21 +70,11 @@ services:
       - traefik.http.middlewares.api-proxy-staging.stripprefix.prefixes=/api
       - traefik.http.routers.api-proxy-staging.middlewares=api-proxy-staging
       - traefik.http.routers.api-proxy-staging.priority=100
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
 
   db-staging:
     image: postgres:15-alpine
-    container_name: db-staging
-    restart: unless-stopped
     networks:
-      - staging
+      - swarm_staging
     environment:
       POSTGRES_USER: staging
       POSTGRES_DB: stagingdb
@@ -89,44 +83,48 @@ services:
       - db_password
     volumes:
       - staging-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U staging -d stagingdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     deploy:
+      replicas: 1
       resources:
         limits:
           cpus: '0.75'
           memory: 1G
-        reservations:
-          cpus: '0.50'
-          memory: 512M
 
   redis-staging:
     image: redis:7-alpine
-    container_name: redis-staging
-    restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass $$(cat /run/secrets/redis_password)
+    command:
+      - redis-server
+      - --appendonly
+      - yes
+      - --requirepass
+      - stagingredis
     networks:
-      - staging
+      - swarm_staging
     volumes:
       - staging-redis-data:/data
     secrets:
       - redis_password
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "$$(cat /run/secrets/redis_password)", "ping"]
+      test: ["CMD", "redis-cli", "-a", "stagingredis", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
     deploy:
+      replicas: 1
       resources:
         limits:
           cpus: '0.25'
           memory: 256M
-        reservations:
-          cpus: '0.10'
-          memory: 128M
 
 networks:
-  staging:
+  swarm_web:
     external: true
-  web:
+  swarm_staging:
     external: true
 
 volumes:

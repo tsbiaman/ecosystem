@@ -19,7 +19,7 @@ jobs:
           script: |
             cd /data/ecosystem
             git pull origin staging
-            docker compose -f docker-compose.yml -f deployments/docker-compose.staging.yml up -d --build
+            docker stack deploy -c deployments/stack-tsbi-staging.yml tsbi-staging
             docker image prune -f
 
       - name: Health check
