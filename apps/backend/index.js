@@ -35,6 +35,15 @@ app.use(cors({
   credentials: true
 }));
 
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Hello from TSBI Development Backend!',
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.get('/api', (req, res) => {
   res.json({
     message: 'Hello from TSBI Development Backend!',
