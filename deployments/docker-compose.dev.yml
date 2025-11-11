@@ -2,7 +2,7 @@ services:
   frontend-dev:
     image: frontend-dev:local
     build:
-      context: ./apps/frontend      # Changed from ../apps/frontend
+      context: ./apps/frontend
       dockerfile: Dockerfile
     container_name: frontend-dev
     restart: unless-stopped
@@ -14,11 +14,12 @@ services:
       - traefik.http.routers.frontend-dev.rule=Host(`dev.tsbi.fun`)
       - traefik.http.routers.frontend-dev.entrypoints=websecure
       - traefik.http.routers.frontend-dev.tls.certresolver=letsencrypt
+      - traefik.http.routers.frontend-dev.priority=1
 
   backend-dev:
     image: backend-dev:local
     build:
-      context: ./apps/backend       # Changed from ../apps/backend
+      context: ./apps/backend
       dockerfile: Dockerfile
     container_name: backend-dev
     restart: unless-stopped
@@ -37,6 +38,13 @@ services:
       - traefik.http.routers.backend-dev.entrypoints=websecure
       - traefik.http.routers.backend-dev.tls.certresolver=letsencrypt
       - traefik.http.services.backend-dev.loadbalancer.server.port=3000
+      - traefik.http.routers.api-proxy-dev.rule=Host(`dev.tsbi.fun`) && PathPrefix(`/api-proxy`)
+      - traefik.http.routers.api-proxy-dev.entrypoints=websecure
+      - traefik.http.routers.api-proxy-dev.tls.certresolver=letsencrypt
+      - traefik.http.routers.api-proxy-dev.service=backend-dev
+      - traefik.http.middlewares.api-proxy-strip.stripprefix.prefixes=/api-proxy
+      - traefik.http.routers.api-proxy-dev.middlewares=api-proxy-strip
+      - traefik.http.routers.api-proxy-dev.priority=100
 
   db-dev:
     image: postgres:15-alpine

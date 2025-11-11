@@ -1,0 +1,69 @@
+services:
+  frontend-prod:
+    image: frontend-prod:local
+    build:
+      context: apps/frontend
+      dockerfile: Dockerfile
+    container_name: frontend-prod
+    restart: unless-stopped
+    networks:
+      - web
+      - production
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.frontend-prod.rule=Host(`tsbi.fun`, `www.tsbi.fun`)
+      - traefik.http.routers.frontend-prod.entrypoints=websecure
+      - traefik.http.routers.frontend-prod.tls.certresolver=letsencrypt
+      - traefik.http.routers.frontend-prod.priority=1
+
+  backend-prod:
+    image: backend-prod:local
+    build:
+      context: apps/backend
+      dockerfile: Dockerfile
+    container_name: backend-prod
+    restart: unless-stopped
+    networks:
+      - web
+      - production
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://prod:prod@db-prod:5432/proddb
+    depends_on:
+      - db-prod
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.backend-prod.rule=Host(`api.tsbi.fun`)
+      - traefik.http.routers.backend-prod.entrypoints=websecure
+      - traefik.http.routers.backend-prod.tls.certresolver=letsencrypt
+      - traefik.http.services.backend-prod.loadbalancer.server.port=3000
+      - traefik.http.routers.api-proxy-prod.rule=Host(`tsbi.fun`, `www.tsbi.fun`) && PathPrefix(`/api`)
+      - traefik.http.routers.api-proxy-prod.entrypoints=websecure
+      - traefik.http.routers.api-proxy-prod.tls.certresolver=letsencrypt
+      - traefik.http.routers.api-proxy-prod.service=backend-prod
+      - traefik.http.middlewares.api-proxy-prod.stripprefix.prefixes=/api
+      - traefik.http.routers.api-proxy-prod.middlewares=api-proxy-prod
+      - traefik.http.routers.api-proxy-prod.priority=100
+
+  db-prod:
+    image: postgres:15-alpine
+    container_name: db-prod
+    restart: unless-stopped
+    networks:
+      - production
+    environment:
+      POSTGRES_USER: prod
+      POSTGRES_PASSWORD: prod
+      POSTGRES_DB: proddb
+    volumes:
+      - prod-db-data:/var/lib/postgresql/data
+
+networks:
+  production:
+    external: true
+  web:
+    external: true
+
+volumes:
+  prod-db-data:
