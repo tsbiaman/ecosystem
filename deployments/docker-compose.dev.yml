@@ -1,6 +1,9 @@
 services:
   frontend-dev:
-    build: ../apps/frontend
+    image: frontend-dev:local
+    build:
+      context: apps/frontend
+      dockerfile: Dockerfile
     container_name: frontend-dev
     restart: unless-stopped
     networks:
@@ -11,9 +14,20 @@ services:
       - traefik.http.routers.frontend-dev.rule=Host(`dev.tsbi.fun`)
       - traefik.http.routers.frontend-dev.entrypoints=websecure
       - traefik.http.routers.frontend-dev.tls.certresolver=letsencrypt
+      
+      # API Proxy - route /api-proxy/* to backend
+      - traefik.http.routers.api-proxy-dev.rule=Host(`dev.tsbi.fun`) && PathPrefix(`/api-proxy`)
+      - traefik.http.routers.api-proxy-dev.entrypoints=websecure
+      - traefik.http.routers.api-proxy-dev.tls.certresolver=letsencrypt
+      - traefik.http.routers.api-proxy-dev.service=backend-dev
+      - traefik.http.middlewares.api-proxy-strip.stripprefix.prefixes=/api-proxy
+      - traefik.http.routers.api-proxy-dev.middlewares=api-proxy-strip
 
   backend-dev:
-    build: ../apps/backend
+    image: backend-dev:local
+    build:
+      context: apps/backend
+      dockerfile: Dockerfile
     container_name: backend-dev
     restart: unless-stopped
     networks:
@@ -21,11 +35,15 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3000
+      - DATABASE_URL=postgresql://dev:dev@db-dev:5432/devdb
+    depends_on:
+      - db-dev
     labels:
       - traefik.enable=true
       - traefik.http.routers.backend-dev.rule=Host(`api-dev.tsbi.fun`)
       - traefik.http.routers.backend-dev.entrypoints=websecure
       - traefik.http.routers.backend-dev.tls.certresolver=letsencrypt
+      - traefik.http.services.backend-dev.loadbalancer.server.port=3000
 
   db-dev:
     image: postgres:15-alpine
@@ -42,6 +60,8 @@ services:
 
 networks:
   development:
+    external: true
+  web:
     external: true
 
 volumes:

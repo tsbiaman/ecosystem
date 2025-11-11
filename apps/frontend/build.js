@@ -21,7 +21,8 @@ const html = `<!DOCTYPE html>
     <div id="api-status">Loading...</div>
   </div>
   <script>
-    fetch('https://api-dev.tsbi.fun/health')
+    // Use relative path to avoid CORS issues
+    fetch('/api-proxy/health')
       .then(r => r.json())
       .then(data => {
         document.getElementById('api-status').innerHTML = 
@@ -30,13 +31,12 @@ const html = `<!DOCTYPE html>
       .catch(err => {
         document.getElementById('api-status').innerHTML = 
           '<div class="api-result">❌ Backend Error: ' + err.message + '</div>';
+        console.error('API Error:', err);
       });
   </script>
 </body>
 </html>`;
 
-// Create dist directory and write index.html
 fs.mkdirSync(path.join(__dirname, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(__dirname, 'dist', 'index.html'), html);
-
 console.log('✅ Build completed');

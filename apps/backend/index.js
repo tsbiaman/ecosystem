@@ -2,7 +2,11 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 
-app.use(cors());
+// Allow CORS from your domain
+app.use(cors({
+  origin: ['https://dev.tsbi.fun', 'http://localhost:3000'],
+  credentials: true
+}));
 
 app.get('/api', (req, res) => {
   res.json({
