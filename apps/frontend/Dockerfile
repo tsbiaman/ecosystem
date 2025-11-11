@@ -15,6 +15,7 @@ RUN npm run build && chown -R nodejs:nodejs /app/dist
 
 USER nodejs
 EXPOSE 80
+WORKDIR /app/dist
 
 # Use Python's http.server directly
-CMD ["python3", "-m", "http.server", "80", "--directory", "/app/dist"]
+CMD ["python3", "-m", "http.server", "80"]

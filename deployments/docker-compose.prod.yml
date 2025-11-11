@@ -11,7 +11,7 @@ services:
       - production
     labels:
       - traefik.enable=true
-      - traefik.http.routers.frontend-prod.rule=Host(`tsbi.fun`, `www.tsbi.fun`)
+      - traefik.http.routers.frontend-prod.rule=Host(`tsbi.fun`) || Host(`www.tsbi.fun`)
       - traefik.http.routers.frontend-prod.entrypoints=websecure
       - traefik.http.routers.frontend-prod.tls.certresolver=letsencrypt
       - traefik.http.routers.frontend-prod.priority=1
@@ -38,7 +38,7 @@ services:
       - traefik.http.routers.backend-prod.entrypoints=websecure
       - traefik.http.routers.backend-prod.tls.certresolver=letsencrypt
       - traefik.http.services.backend-prod.loadbalancer.server.port=3000
-      - traefik.http.routers.api-proxy-prod.rule=Host(`tsbi.fun`, `www.tsbi.fun`) && PathPrefix(`/api`)
+      - traefik.http.routers.api-proxy-prod.rule=(Host(`tsbi.fun`) || Host(`www.tsbi.fun`)) && PathPrefix(`/api`)
       - traefik.http.routers.api-proxy-prod.entrypoints=websecure
       - traefik.http.routers.api-proxy-prod.tls.certresolver=letsencrypt
       - traefik.http.routers.api-proxy-prod.service=backend-prod

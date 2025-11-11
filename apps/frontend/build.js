@@ -22,7 +22,7 @@ const html = `<!DOCTYPE html>
   </div>
   <script>
     // Use the proxy path that Traefik will route
-    fetch('/api-proxy/health')
+    fetch('/api/health')
       .then(r => {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
