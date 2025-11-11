@@ -1,78 +1,134 @@
 secrets:
   db_password:
-    file: /data/ecosystem/secrets/staging_db_pass
+    file: /data/ecosystem/secrets/prod_db_pass
+  redis_password:
+    file: /data/ecosystem/secrets/prod_redis_pass
 
 services:
-  frontend-staging:
-    image: frontend-staging:local
+  frontend-prod:
+    image: frontend-prod:local
     build:
       context: apps/frontend
       dockerfile: Dockerfile
-    container_name: frontend-staging
+    container_name: frontend-prod
     restart: unless-stopped
     networks:
       - web
-      - staging
+      - production
     labels:
       - traefik.enable=true
-      - traefik.http.routers.frontend-staging.rule=Host(`staging.tsbi.fun`)
-      - traefik.http.routers.frontend-staging.entrypoints=websecure
-      - traefik.http.routers.frontend-staging.tls.certresolver=letsencrypt
-      - traefik.http.routers.frontend-staging.priority=1
+      - traefik.http.routers.frontend-prod.rule=Host(`tsbi.fun`) || Host(`www.tsbi.fun`)
+      - traefik.http.routers.frontend-prod.entrypoints=websecure
+      - traefik.http.routers.frontend-prod.tls.certresolver=letsencrypt
+      - traefik.http.routers.frontend-prod.priority=1
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
 
-  backend-staging:
-    image: backend-staging:local
+  backend-prod:
+    image: backend-prod:local
     build:
       context: apps/backend
       dockerfile: Dockerfile
-    container_name: backend-staging
+    container_name: backend-prod
     restart: unless-stopped
     networks:
       - web
-      - staging
+      - production
     environment:
-      - NODE_ENV=staging
+      - NODE_ENV=production
       - PORT=3000
-      - DATABASE_URL=postgresql://staging@db-staging:5432/stagingdb
+      - DATABASE_URL=postgresql://prod@db-prod:5432/proddb
       - DATABASE_PASSWORD_FILE=/run/secrets/db_password
+      - REDIS_URL=redis://:prod@redis-prod:6379
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_password
     secrets:
       - db_password
+      - redis_password
     depends_on:
-      - db-staging
+      - db-prod
+      - redis-prod
     labels:
       - traefik.enable=true
-      - traefik.http.routers.backend-staging.rule=Host(`api-staging.tsbi.fun`)
-      - traefik.http.routers.backend-staging.entrypoints=websecure
-      - traefik.http.routers.backend-staging.tls.certresolver=letsencrypt
-      - traefik.http.services.backend-staging.loadbalancer.server.port=3000
-      - traefik.http.routers.api-proxy-staging.rule=Host(`staging.tsbi.fun`) && PathPrefix(`/api`)
-      - traefik.http.routers.api-proxy-staging.entrypoints=websecure
-      - traefik.http.routers.api-proxy-staging.tls.certresolver=letsencrypt
-      - traefik.http.routers.api-proxy-staging.service=backend-staging
-      - traefik.http.middlewares.api-proxy-staging.stripprefix.prefixes=/api
-      - traefik.http.routers.api-proxy-staging.middlewares=api-proxy-staging
-      - traefik.http.routers.api-proxy-staging.priority=100
+      - traefik.http.routers.backend-prod.rule=Host(`api.tsbi.fun`)
+      - traefik.http.routers.backend-prod.entrypoints=websecure
+      - traefik.http.routers.backend-prod.tls.certresolver=letsencrypt
+      - traefik.http.services.backend-prod.loadbalancer.server.port=3000
+      - traefik.http.routers.api-proxy-prod.rule=(Host(`tsbi.fun`) || Host(`www.tsbi.fun`)) && PathPrefix(`/api`)
+      - traefik.http.routers.api-proxy-prod.entrypoints=websecure
+      - traefik.http.routers.api-proxy-prod.tls.certresolver=letsencrypt
+      - traefik.http.routers.api-proxy-prod.service=backend-prod
+      - traefik.http.middlewares.api-proxy-prod.stripprefix.prefixes=/api
+      - traefik.http.routers.api-proxy-prod.middlewares=api-proxy-prod
+      - traefik.http.routers.api-proxy-prod.priority=100
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
-  db-staging:
+  db-prod:
     image: postgres:15-alpine
-    container_name: db-staging
+    container_name: db-prod
     restart: unless-stopped
     networks:
-      - staging
+      - production
     environment:
-      POSTGRES_USER: staging
-      POSTGRES_DB: stagingdb
+      POSTGRES_USER: prod
+      POSTGRES_DB: proddb
       POSTGRES_PASSWORD_FILE: /run/secrets/db_password
     secrets:
       - db_password
     volumes:
-      - staging-db-data:/var/lib/postgresql/data
+      - prod-db-data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 1G
+        reservations:
+          cpus: '0.50'
+          memory: 512M
+
+  redis-prod:
+    image: redis:7-alpine
+    container_name: redis-prod
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass $$(cat /run/secrets/redis_password)
+    networks:
+      - production
+    volumes:
+      - prod-redis-data:/data
+    secrets:
+      - redis_password
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "$$(cat /run/secrets/redis_password)", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
 
 networks:
-  staging:
+  production:
     external: true
   web:
     external: true
 
 volumes:
-  staging-db-data:
+  prod-db-data:
+  prod-redis-data:
