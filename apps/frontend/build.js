@@ -21,9 +21,12 @@ const html = `<!DOCTYPE html>
     <div id="api-status">Loading...</div>
   </div>
   <script>
-    // Use relative path to avoid CORS issues
+    // Use the proxy path that Traefik will route
     fetch('/api-proxy/health')
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
       .then(data => {
         document.getElementById('api-status').innerHTML = 
           '<div class="api-result">✅ Backend: ' + JSON.stringify(data, null, 2) + '</div>';
