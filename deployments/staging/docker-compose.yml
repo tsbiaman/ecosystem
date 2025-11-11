@@ -8,7 +8,7 @@ services:
   frontend-staging:
     image: frontend-staging:local
     build:
-      context: apps/frontend
+      context: ../../apps/frontend
       dockerfile: Dockerfile
     container_name: frontend-staging
     restart: unless-stopped
@@ -33,7 +33,7 @@ services:
   backend-staging:
     image: backend-staging:local
     build:
-      context: apps/backend
+      context: ../../apps/backend
       dockerfile: Dockerfile
     container_name: backend-staging
     restart: unless-stopped

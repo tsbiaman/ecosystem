@@ -7,7 +7,7 @@ services:
   frontend-dev:
     image: frontend-dev:local
     build:
-      context: ./apps/frontend
+      context: ../../apps/frontend
       dockerfile: Dockerfile
     container_name: frontend-dev
     restart: unless-stopped
@@ -32,7 +32,7 @@ services:
   backend-dev:
     image: backend-dev:local
     build:
-      context: ./apps/backend
+      context: ../../apps/backend
       dockerfile: Dockerfile
     container_name: backend-dev
     restart: unless-stopped
