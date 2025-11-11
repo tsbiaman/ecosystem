@@ -1,6 +1,8 @@
 secrets:
   db_password:
     file: /data/ecosystem/secrets/dev_db_pass
+  redis_password:
+    file: /data/ecosystem/secrets/dev_redis_pass
 services:
   frontend-dev:
     image: frontend-dev:local
@@ -18,6 +20,14 @@ services:
       - traefik.http.routers.frontend-dev.entrypoints=websecure
       - traefik.http.routers.frontend-dev.tls.certresolver=letsencrypt
       - traefik.http.routers.frontend-dev.priority=1
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
 
   backend-dev:
     image: backend-dev:local
@@ -34,10 +44,16 @@ services:
       - PORT=3000
       - DATABASE_URL=postgresql://dev@db-dev:5432/devdb
       - DATABASE_PASSWORD_FILE=/run/secrets/db_password
+      - REDIS_URL=redis://:dev@redis-dev:6379
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_password
     secrets:
       - db_password
+      - redis_password
     depends_on:
-      - db-dev
+      db-dev:
+        condition: service_healthy
+      redis-dev:
+        condition: service_healthy
     labels:
       - traefik.enable=true
       - traefik.http.routers.backend-dev.rule=Host(`api-dev.tsbi.fun`)
@@ -52,6 +68,14 @@ services:
       - traefik.http.middlewares.api-proxy-strip.stripprefix.prefixes=/api
       - traefik.http.routers.api-proxy-dev.middlewares=api-proxy-strip
       - traefik.http.routers.api-proxy-dev.priority=100
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   db-dev:
     image: postgres:15-alpine
@@ -66,9 +90,46 @@ services:
       POSTGRES_PASSWORD_FILE: /run/secrets/db_password
     secrets:
       - db_password
-
     volumes:
       - dev-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev -d devdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 1G
+        reservations:
+          cpus: '0.50'
+          memory: 512M
+
+  redis-dev:
+    image: redis:7-alpine
+    container_name: redis-dev
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass $$(cat /run/secrets/redis_password)
+    networks:
+      - development
+    volumes:
+      - dev-redis-data:/data
+    secrets:
+      - redis_password
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "$$(cat /run/secrets/redis_password)", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
 
 networks:
   development:
@@ -78,3 +139,4 @@ networks:
 
 volumes:
   dev-db-data:
+  dev-redis-data:
