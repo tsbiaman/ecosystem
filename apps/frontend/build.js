@@ -4,7 +4,7 @@ const path = require('path');
 const html = `<!DOCTYPE html>
 <html>
 <head>
-  <title>TSBI Dev Environment</title>
+  <title>TSBI Dev - testing Environment</title>
   <style>
     body { font-family: Arial, sans-serif; padding: 40px; background: #f0f2f5; }
     .container { max-width: 800px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
