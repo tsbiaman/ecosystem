@@ -17,6 +17,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            set -e
             cd /data/ecosystem
             git pull origin develop
             docker stack deploy -c deployments/stack-tsbi-dev.yml tsbi-dev
